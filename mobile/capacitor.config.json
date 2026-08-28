@@ -1,0 +1,11 @@
+{
+  "appId": "com.nicemank.musikbox",
+  "appName": "MusikBox",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": true
+  }
+}

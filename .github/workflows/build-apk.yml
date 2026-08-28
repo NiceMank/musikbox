@@ -1,0 +1,78 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [v1]
+    paths:
+      - "mobile/**"
+      - ".github/workflows/build-apk.yml"
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "21"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Capacitor deps
+        working-directory: mobile
+        run: npm install
+
+      - name: Add Android platform
+        working-directory: mobile
+        run: |
+          if [ ! -d android ]; then
+            npx cap add android
+          fi
+          npx cap sync android
+
+      - name: Enable cleartext / internet in manifest
+        working-directory: mobile
+        run: |
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          if [ -f "$MANIFEST" ]; then
+            if ! grep -q 'android.permission.INTERNET' "$MANIFEST"; then
+              sed -i 's|<application|<uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />\n    <application|' "$MANIFEST"
+            fi
+            if ! grep -q 'usesCleartextTraffic' "$MANIFEST"; then
+              sed -i 's/<application/<application android:usesCleartextTraffic="true" /' "$MANIFEST"
+            fi
+          fi
+
+      - name: Build debug APK
+        working-directory: mobile/android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Locate APK
+        id: apk
+        run: |
+          APK=$(find mobile/android -name "*.apk" -path "*/debug/*" | head -1)
+          echo "path=$APK" >> "$GITHUB_OUTPUT"
+          ls -lh "$APK"
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MusikBox-debug
+          path: ${{ steps.apk.outputs.path }}
+          if-no-files-found: error
+          retention-days: 14
