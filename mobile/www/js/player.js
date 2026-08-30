@@ -72,6 +72,63 @@
     if (!ms) return;
     try { ms.playbackState = playing ? "playing" : "paused"; } catch (e) {}
   }
+
+  /* ---- Native media notification + foreground behaviour (Capacitor plugin).
+     This shows a REAL Android media notification (artwork/title/artist + prev/play/
+     next) and routes its button presses back to the engine. In a browser (no
+     Capacitor) it is a harmless no-op; every call is guarded so it can never break
+     playback. The persistent background service itself is provided by the native
+     plugin (verified at build time); final on-device behaviour is the last gate. */
+  const hasCap = (typeof Capacitor !== "undefined");
+  const MC = () => { try { return hasCap && Capacitor.Plugins && Capacitor.Plugins.MusicControls ? Capacitor.Plugins.MusicControls : null; } catch (e) { return null; } };
+  let mcCreated = false, mcLastElapsed = 0;
+  function mcCreate(t) {
+    const c = MC(); if (!c) return;
+    try {
+      c.create({
+        track: t.title || "",
+        artist: t.artist || "",
+        album: t.album || "",
+        cover: t.artwork || t.thumb || "",
+        duration: Math.round(t.duration || 0),
+        elapsed: 0,
+        isPlaying: Player.playing,
+        hasPrev: true, hasNext: true, hasScrubbing: false,
+        ticker: (t.title || "") + " - " + (t.artist || ""),
+        notificationIcon: "notification",
+      }).catch(() => {});
+      mcCreated = true;
+    } catch (e) {}
+  }
+  function mcUpdatePlaying(p) {
+    const c = MC(); if (!c || !mcCreated) return;
+    try { c.updateIsPlaying({ isPlaying: !!p }); } catch (e) {}
+  }
+  function mcUpdateElapsed(elapsed) {
+    const c = MC(); if (!c || !mcCreated) return;
+    if (elapsed - mcLastElapsed < 1) return; // throttle to ~1/s
+    mcLastElapsed = elapsed;
+    try { c.updateElapsed({ elapsed: Math.round(elapsed || 0), isPlaying: Player.playing }); } catch (e) {}
+  }
+  function mcDestroy() {
+    const c = MC(); if (!c || !mcCreated) return;
+    try { c.destroy().catch(() => {}); } catch (e) {}
+    mcCreated = false;
+  }
+  function setupMusicControls() {
+    const c = MC(); if (!c) return;
+    try {
+      // Route native notification buttons -> engine (real controls).
+      c.addListener("controlsNotification", (info) => {
+        const m = info && (info.message || info);
+        if (m === "music-controls-next") Player.next();
+        else if (m === "music-controls-previous") Player.prev();
+        else if (m === "music-controls-play") Player.play();
+        else if (m === "music-controls-pause") Player.pause();
+        else if (m === "music-controls-toggle-play-pause") Player.toggle();
+      }).catch(() => {});
+    } catch (e) {}
+  }
   function setupMediaSession() {
     if (!ms) return;
     try {
@@ -112,6 +169,7 @@
     init() {
       audio.addEventListener("timeupdate", () => {
         this.currentTime = audio.currentTime;
+        mcUpdateElapsed(this.currentTime);
         this.emit("time", this.currentTime, this.duration());
       });
       audio.addEventListener("durationchange", () => { this.emit("time", audio.currentTime, this.duration()); });
@@ -128,6 +186,7 @@
       });
       audio.addEventListener("ended", () => this._onEnded());
       setupMediaSession();
+      setupMusicControls();
     },
 
     _ensureCtx() {
@@ -185,6 +244,7 @@
       audio.setSource(src);
       this.playing = false;
       updateMediaSession(t);
+      mcCreate(t);
       this.emit("track", t);
       this.emit("state", false);
     },
@@ -199,6 +259,7 @@
       audio.play().then(() => {
         this.playing = true;
         updatePlaybackState(true);
+        mcUpdatePlaying(true);
         this.emit("state", true);
       }).catch((e) => this.emit("error", e));
     },
@@ -207,6 +268,7 @@
       try { audio.pause(); } catch (e) {}
       this.playing = false;
       updatePlaybackState(false);
+      mcUpdatePlaying(false);
       this.emit("state", false);
     },
     toggle() { if (audio.paused || !this.playing) this.play(); else this.pause(); },

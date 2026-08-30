@@ -51,12 +51,16 @@ jobs:
             echo "::error::Manifest not found after cap sync"
             exit 1
           fi
-          # grant Android 13+ media audio read + legacy external storage
+          # grant Internet, local media read, media notification (Android 13+) & foreground audio service
           for P in "android.permission.INTERNET" \
                    "android.permission.ACCESS_NETWORK_STATE" \
                    "android.permission.READ_EXTERNAL_STORAGE" \
                    "android.permission.READ_MEDIA_AUDIO" \
-                   "android.permission.WAKE_LOCK"; do
+                   "android.permission.WAKE_LOCK" \
+                   "android.permission.POST_NOTIFICATIONS" \
+                   "android.permission.FOREGROUND_SERVICE" \
+                   "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" \
+                   "android.permission.FOREGROUND_SERVICE_DATA_SYNC"; do
             if ! grep -q "$P" "$MANIFEST"; then
               sed -i "s|</manifest>|    <uses-permission android:name=\"$P\" />\n</manifest>|" "$MANIFEST"
             fi

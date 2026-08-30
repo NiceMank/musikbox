@@ -156,6 +156,7 @@
       player_play: "Lecture / Pause",
 
       playback_failed: "Lecture impossible",
+      full: "Complet",
       mood_emotion: "Émotionnel",
       mood_electronic: "Électronique",
       mood_ambient: "Ambient",
@@ -318,6 +319,7 @@
       player_play: "Play / Pause",
 
       playback_failed: "Playback failed",
+      full: "Full",
       mood_emotion: "Emotional",
       mood_electronic: "Electronic",
       mood_ambient: "Ambient",

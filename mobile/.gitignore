@@ -3,4 +3,5 @@ android/
 .idea/
 *.apk
 *.aab
-.DS_Store
+apk/
+tests/node_modules/

@@ -125,8 +125,10 @@
     const cover = row.querySelector("img");
     if (cover) { cover.src = t.thumb || t.artwork; cover.onerror = () => { cover.style.display = "none"; }; }
     row.querySelector(".t-title").textContent = t.title;
-    row.querySelector(".t-artist").textContent = (t.artist || I18N.t("unknown")) + (t.source === "local" ? " · " + I18N.t("local") : "");
+    const srcTxt = t.source === "local" ? " · " + I18N.t("local") : (t.full ? " · ∞ " + I18N.t("full") : "");
+    row.querySelector(".t-artist").textContent = (t.artist || I18N.t("unknown")) + srcTxt;
     row.querySelector(".t-dur").textContent = t.duration ? " " + fmt(t.duration) : "";
+    if (t.full) row.querySelector(".t-artist").style.color = "var(--emerald)";
     row.querySelector(".t-cover").style.color = isFav(t.key) ? "#ffb8c4" : "";
     row.onclick = () => {
       const nl = list || [t];
@@ -286,9 +288,19 @@
     const q = searchQ.trim(); const seq = ++_searchSeq;
     if (!q) { renderEmptySearch(); return; }
     r.innerHTML = '<div class="st-block st-sub">' + esc(I18N.t("search_loading")) + '</div>';
-    let online = [], local = [];
-    try { if (searchSource !== "local") online = await API.searchOnline(q); } catch (e) {}
+    let online = [], local = [], full = [];
     local = API.searchLocal(q);
+    if (searchSource !== "local") {
+      // Full-length tracks (Internet Archive) are the primary online source —
+      // they play to the real end, unlike 30s iTunes previews.
+      try { full = await API.searchArchive(q, 12); } catch (e) {}
+      try {
+        const previews = await API.searchOnline(q, 12);
+        // keep previews too, but never cascade duplicates
+        online = API.combine(full, previews).filter(t => !t.full || full.some(f => f.key === t.key));
+        online = API.combine(full, previews);
+      } catch (e) { online = full; }
+    }
     if (seq !== _searchSeq) return;
     let items;
     if (searchSource === "online") items = online;

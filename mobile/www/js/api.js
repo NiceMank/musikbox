@@ -75,6 +75,45 @@
       .map(t => Object.assign({}, t, { source: "local" }));
   }
 
+  // ---- Internet Archive: FULL-LENGTH, streamable, CORS-enabled, no API key. ----
+  // This is the source that plays to the actual end of the song (unlike iTunes 30s previews).
+  function parseDurStr(len) {
+    const s = String(len || "").trim();
+    if (s.includes(":")) { const p = s.split(":").map(Number); return p.length === 3 ? p[0]*3600+p[1]*60+p[2] : p[0]*60+(p[1]||0); }
+    const f = parseFloat(s); return isFinite(f) ? Math.round(f) : 0;
+  }
+  async function searchArchive(query, limit) {
+    limit = limit || 10;
+    const q = encodeURIComponent('(title:("' + query + '") AND mediatype:audio)');
+    const s = await fetchJSON("https://archive.org/advancedsearch.php?q=" + q +
+      "&fl[]=identifier&rows=" + limit + "&page=1&output=json");
+    const docs = (s.response && s.response.docs) || [];
+    const items = await Promise.all(docs.map(async (x) => {
+      try {
+        const m = await fetchJSON("https://archive.org/metadata/" + x.identifier);
+        const files = m.files || [];
+        const mp3 = files.find(f => f.name && /\.mp3$/i.test(f.name));
+        if (!mp3) return null;
+        const md = m.metadata || {};
+        const creator = [].concat(md.creator || md.artist || []).join(", ") || x.creator || "";
+        const art = md.image ? "https://archive.org/services/img/" + x.identifier : "";
+        return {
+          key: "ia-" + x.identifier,
+          title: md.title || x.title || x.identifier,
+          artist: (creator || "Internet Archive").replace(/[,_|]+/g, " ").trim(),
+          album: (md.album || ""),
+          genre: (md.genre || "Archive"),
+          thumb: art, artwork: art,
+          src: "https://archive.org/download/" + x.identifier + "/" + mp3.name,
+          duration: parseDurStr(mp3.length),
+          full: true,          // signals a real full-length track (plays to the end)
+          source: "online",
+        };
+      } catch (e) { return null; }
+    }));
+    return items.filter(Boolean);
+  }
+
   function combine(online, local) {
     const keys = new Set();
     const out = [];
@@ -87,5 +126,5 @@
   window.addEventListener("online", () => { window.isOnline = true; });
   window.addEventListener("offline", () => { window.isOnline = false; });
 
-  global.API = { searchOnline, searchServer, topOnline, searchLocal, combine, serverHealth, apiBase };
+  global.API = { searchOnline, searchArchive, searchServer, topOnline, searchLocal, combine, serverHealth, apiBase };
 })(window);
