@@ -95,7 +95,6 @@
         isPlaying: Player.playing,
         hasPrev: true, hasNext: true, hasScrubbing: false,
         ticker: (t.title || "") + " - " + (t.artist || ""),
-        notificationIcon: "notification",
       }).catch(() => {});
       mcCreated = true;
     } catch (e) {}
