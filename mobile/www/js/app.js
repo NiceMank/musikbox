@@ -68,7 +68,12 @@
     const d = Player.duration();
     const fill = $("#mini-prog"); if (fill) fill.style.width = (d ? (Player.currentTime / d) * 100 : 0) + "%";
   });
-  Player.on("error", () => toast(I18N.t("search_error_title"), true));
+  let playError = null;
+  Player.on("error", (e) => {
+    playError = e; toast(I18N.t("playback_failed"), true);
+    renderDyn();
+  });
+  Player.on("state", (p) => { if (p) playError = null; });
   Player.on("queue", () => persistQueue());
   // persistent queue restore happens after loadAll() in init()
 
@@ -210,7 +215,10 @@
         '<button class="gbtn" id="np-dream">' + I.moon + '</button>' +
       '</div>' +
       '<div class="vol-wrap" style="justify-content:center;margin-top:16px">' + I.vol +
-      '<input type="range" class="vol" id="np-volume" min="0" max="100" value="' + Math.round(Player.getVolume() * 100) + '"></div>';
+      '<input type="range" class="vol" id="np-volume" min="0" max="100" value="' + Math.round(Player.getVolume() * 100) + '"></div>' +
+      (playError ? '<div class="st-block" style="padding:14px"><div class="st-sub">' +
+        esc(I18N.t("search_error_title")) + '</div><button class="btn solid st-btn" id="np-retry">' +
+        esc(I18N.t("search_retry")) + '</button></div>' : '');
   }
   function buildNowPlayingExtra() {
     const d = document.createElement("div");
@@ -227,6 +235,7 @@
     if ($("#np-dl")) $("#np-dl").onclick = () => startDownload(Player.current);
     if ($("#np-dream")) $("#np-dream").onclick = () => toggleDream();
     if ($("#np-volume")) $("#np-volume").oninput = (e) => Player.setVolume(e.target.value / 100);
+    if ($("#np-retry")) $("#np-retry").onclick = () => Player.retry();
     const seek = $("#np-seek");
     if (seek) seek.onclick = (e) => { const r = seek.getBoundingClientRect(); Player.seekFrac((e.clientX - r.left) / r.width); };
     // periodic time update for NP
@@ -382,15 +391,16 @@
   // ---- MORE ----
   function renderMore() {
     const v = $("#view");
-    v.innerHTML =
-      '<div class="mx-top"><h1 class="mx-title">' + esc(I18N.t("more_title")) + '</h1></div>' +
-      '<div class="membrane">' +
-      menuRow("more_queue", I.queue, openQueue) +
-      menuRow("more_mood", I.palette, openMood) +
-      menuRow("more_dream", I.moon, toggleDream) +
-      menuRow("more_settings", I.gear, openSettings) +
-      menuRow("more_onboarding", I.playRepeat, () => { openOnboarding(true); }) +
-      '</div>';
+    // Build with DOM nodes (menuRow returns an element — never stringify it!).
+    const shell = document.createElement("div");
+    shell.className = "membrane";
+    shell.appendChild(menuRow("more_queue", I.queue, openQueue));
+    shell.appendChild(menuRow("more_mood", I.palette, openMood));
+    shell.appendChild(menuRow("more_dream", I.moon, toggleDream));
+    shell.appendChild(menuRow("more_settings", I.gear, openSettings));
+    shell.appendChild(menuRow("more_onboarding", I.playRepeat, () => { openOnboarding(true); }));
+    v.innerHTML = '<div class="mx-top"><h1 class="mx-title">' + esc(I18N.t("more_title")) + '</h1></div>';
+    v.appendChild(shell);
   }
   function menuRow(label, ico, onClick) {
     const d = document.createElement("div"); d.className = "set-row"; d.style.cursor = "pointer";
@@ -674,9 +684,12 @@
     // restore persisted queue
     if (DB.queue && DB.queue.length) Player.setQueue(DB.queue);
     VIZ.cons.start();
-    // mini player controls
-    $("#mini-play").onclick = () => Player.toggle();
-    $("#mini-close").onclick = () => { $("#mini").classList.add("hidden"); Player.pause(); };
+    // mini player controls — tap body to open Now Playing; playback never resets.
+    $("#mini-play").onclick = (e) => { e.stopPropagation(); Player.toggle(); };
+    $("#mini-close").onclick = (e) => { e.stopPropagation(); $("#mini").classList.add("hidden"); Player.pause(); };
+    $("#mini").addEventListener("click", () => go("home"));
+    // loading state on the mini play button
+    Player.on("loading", (on) => { if (on) { const p = $("#mini-prog"); if (p) p.style.opacity = ".6"; } else { const p = $("#mini-prog"); if (p) p.style.opacity = "1"; } });
     try {
       if (navigator.mediaSession) {
         navigator.mediaSession.setActionHandler("play", () => Player.play());

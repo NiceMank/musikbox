@@ -16,6 +16,8 @@
     canvas: null, ctx: null, raf: null, last: 0,
     start(id) {
       const c = document.getElementById(id); if (!c) return;
+      // Cancel any prior loop so re-renders never stack render loops.
+      this.stop();
       this.canvas = c; const dpr = Math.min(2, window.devicePixelRatio || 1);
       const s = c.clientWidth || 300;
       c.width = s * dpr; c.height = s * dpr;
@@ -26,10 +28,12 @@
       if (!this.canvas) return;
       const ctx = this.ctx; const s = this.canvas.width; const cx = s / 2, cy = s / 2;
       ctx.clearRect(0, 0, s, s);
-      const b = Player.getBands();
+      const b = (Player.playing || !Player.current) ? Player.getBands() : null;
       const mood = moodColor();
       const t = performance.now() / 1000;
-      const energy = b ? (0.4 * b.bass + 0.3 * b.mid + 0.3 * b.level) : (0.15 + 0.05 * Math.sin(t * 2));
+      // When paused we calm the animation naturally instead of stopping or staying static.
+      const energy = b ? (0.4 * b.bass + 0.3 * b.mid + 0.3 * b.level)
+                       : (Player.playing ? 0.18 : 0.08 + 0.03 * Math.sin(t * 1.2));
       const pulse = 1 + energy * 0.22;
 
       // outer glow rings
@@ -71,6 +75,7 @@
   const cons = {
     ctx: null, raf: null, parts: [],
     start() {
+      this.stop();
       const c = document.getElementById("viz"); if (!c) return;
       const dpr = Math.min(2, window.devicePixelRatio || 1);
       c.width = innerWidth * dpr; c.height = innerHeight * dpr;
@@ -115,6 +120,7 @@
       };
     },
     start() {
+      this.stop();
       let c = document.getElementById("dream-canvas");
       const dpr = Math.min(2, window.devicePixelRatio || 1);
       c.width = innerWidth * dpr; c.height = innerHeight * dpr;
@@ -128,7 +134,7 @@
     },
     loop() {
       const ctx = this.ctx; if (!ctx) return;
-      const mood = moodColor(); const b = Player.getBands();
+      const mood = moodColor(); const b = (Player.playing || !Player.current) ? Player.getBands() : null;
       const ctx2 = this.ctx;
       ctx2.globalCompositeOperation = "source-over";
       ctx2.fillStyle = "rgba(0,0,0,0.14)"; ctx2.fillRect(0, 0, this.w, this.h);

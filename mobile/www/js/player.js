@@ -8,6 +8,24 @@
   audio.preload = "metadata";
   audio.volume = 0.85;
 
+  // True cause of "stops after a few seconds": routing a cross-origin media element
+  // through a WebAudio graph (analyser) REQUIRES the media to be fetched in CORS mode.
+  // Without crossOrigin="anonymous", the spec silently drops the audio data, so the
+  // element plays ~1s of buffer then goes silent/errors. We set it only for remote
+  // http(s) sources (which here send Access-Control-Allow-Origin: *); local blob/file
+  // sources are same-origin/native and must NOT have crossOrigin set.
+  audio.setSource = function (src) {
+    const remote = /^https?:\/\//i.test(src || "");
+    if (remote !== audio._crossSet) {
+      try {
+        if (remote) { audio.crossOrigin = "anonymous"; }
+        else { audio.removeAttribute("crossorigin"); }
+        audio._crossSet = remote;
+      } catch (e) {}
+    }
+    audio.src = src;
+  };
+
   let audioCtx = null;
   let analyser = null;
   let srcNode = null;
@@ -33,9 +51,17 @@
         this.currentTime = audio.currentTime;
         this.emit("time", this.currentTime, this.duration());
       });
+      audio.addEventListener("durationchange", () => { this.emit("time", audio.currentTime, this.duration()); });
       audio.addEventListener("progress", () => this.emit("progress"));
+      audio.addEventListener("waiting", () => this.emit("loading", true));
+      audio.addEventListener("playing", () => { this.emit("loading", false); });
+      audio.addEventListener("stalled", () => this.emit("loading", true));
+      audio.addEventListener("canplay", () => this.emit("loading", false));
+      // Reflect the real engine state — never trust a UI flag.
+      audio.addEventListener("play", () => { this.playing = true; this.emit("state", true); });
+      audio.addEventListener("pause", () => { if (!audio.ended) { this.playing = false; this.emit("state", false); } });
       audio.addEventListener("error", () => {
-        if (audio.src) this.emit("error", audio.error);
+        if (audio.src) this.emit("error", audio.error || { message: "audio-error" });
       });
       audio.addEventListener("ended", () => this._onEnded());
     },
@@ -44,18 +70,29 @@
       if (!audioCtx) {
         const AC = window.AudioContext || window.webkitAudioContext;
         if (AC) {
-          audioCtx = new AC();
-          srcNode = audioCtx.createMediaElementSource(audio);
-          analyser = audioCtx.createAnalyser();
-          analyser.fftSize = 256;
-          analyser.smoothingTimeConstant = 0.75;
-          srcNode.connect(analyser);
-          analyser.connect(audioCtx.destination);
-          freqData = new Uint8Array(analyser.frequencyBinCount);
+          try {
+            audioCtx = new AC();
+            srcNode = audioCtx.createMediaElementSource(audio);
+            analyser = audioCtx.createAnalyser();
+            analyser.fftSize = 256;
+            analyser.smoothingTimeConstant = 0.75;
+            srcNode.connect(analyser);
+            analyser.connect(audioCtx.destination);
+            freqData = new Uint8Array(analyser.frequencyBinCount);
+          } catch (e) {
+            // If the graph can't be built (e.g. element already routed), fall back
+            // to plain playback (no analyser) rather than silent audio.
+            audioCtx = null; analyser = null; freqData = null; srcNode = null;
+          }
         }
       }
-      if (audioCtx && audioCtx.state === "suspended") audioCtx.resume().catch(() => {});
       return !!analyser;
+    },
+    _ctx() {
+      if (audioCtx && audioCtx.state === "suspended") {
+        return audioCtx.resume().catch(() => {});
+      }
+      return Promise.resolve();
     },
 
     _pump() {
@@ -81,7 +118,7 @@
       const src = this._srcFor(t);
       if (!src) { this.emit("error", { message: "no-src" }); return; }
       this.current = t;
-      audio.src = src;
+      audio.setSource(src);
       this.playing = false;
       this.emit("track", t);
       this.emit("state", false);
@@ -92,14 +129,17 @@
       if (!this.current) return;
       this._ensureCtx();
       this._pump();
+      // resume the AudioContext inside the user gesture so the analyser graph works
+      this._ctx().catch(() => {});
       audio.play().then(() => {
         this.playing = true;
         this.emit("state", true);
       }).catch((e) => this.emit("error", e));
     },
 
-    pause() { audio.pause(); this.playing = false; this.emit("state", false); },
+    pause() { try { audio.pause(); } catch (e) {} this.playing = false; this.emit("state", false); },
     toggle() { if (audio.paused || !this.playing) this.play(); else this.pause(); },
+    retry() { if (this.current) this.play(this.current); },
 
     duration() { return (audio.duration && isFinite(audio.duration)) ? audio.duration : 0; },
     seek(sec) {
