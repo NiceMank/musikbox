@@ -1,2 +1,5 @@
 stitch_extract/
 apk/
+__pycache__/
+server.py:
+*.pyc
