@@ -157,6 +157,8 @@
 
       playback_failed: "Lecture impossible",
       full: "Complet",
+      discover: "Découvrir",
+      no_full_free: "Pas de version complète libre pour ce titre. Essayez les pistes ∞ Complet.",
       mood_emotion: "Émotionnel",
       mood_electronic: "Électronique",
       mood_ambient: "Ambient",
@@ -320,6 +322,8 @@
 
       playback_failed: "Playback failed",
       full: "Full",
+      discover: "Discover",
+      no_full_free: "No free full version of this track. Try the ∞ Full tracks.",
       mood_emotion: "Emotional",
       mood_electronic: "Electronic",
       mood_ambient: "Ambient",

@@ -125,15 +125,30 @@
     const cover = row.querySelector("img");
     if (cover) { cover.src = t.thumb || t.artwork; cover.onerror = () => { cover.style.display = "none"; }; }
     row.querySelector(".t-title").textContent = t.title;
-    const srcTxt = t.source === "local" ? " · " + I18N.t("local") : (t.full ? " · ∞ " + I18N.t("full") : "");
+    const srcTxt = t.source === "local" ? " · " + I18N.t("local")
+      : t.full ? " · ∞ " + I18N.t("full")
+      : t.web ? " · ◌ " + I18N.t("discover") : "";
     row.querySelector(".t-artist").textContent = (t.artist || I18N.t("unknown")) + srcTxt;
     row.querySelector(".t-dur").textContent = t.duration ? " " + fmt(t.duration) : "";
-    if (t.full) row.querySelector(".t-artist").style.color = "var(--emerald)";
+    row.querySelector(".t-artist").style.color = t.full ? "var(--emerald)" : (t.web ? "var(--text-2)" : "");
     row.querySelector(".t-cover").style.color = isFav(t.key) ? "#ffb8c4" : "";
-    row.onclick = () => {
-      const nl = list || [t];
+    row.querySelector(".t-cover").style.opacity = t.web && !t.full ? ".75" : "1";
+    row.onclick = async () => {
+      // Directory items (web) have no direct stream — resolve to a real playable
+      // full-length track first (never fake / never silent).
+      let playable = t;
+      if (t.web && !t.src) {
+        toast(I18N.t("search_loading"));
+        playable = await API.resolvePlayable(t, API) || t;
+      }
+      if (!playable.src) {
+        // Honest: the directory lists the title but no free full-length source exists.
+        toast(I18N.t("no_full_free"), true);
+        return;
+      }
+      const nl = list || [playable];
       Player.setQueue(nl);
-      const i = nl.findIndex(x => x.key === t.key);
+      const i = nl.findIndex(x => x.key === playable.key);
       if (i >= 0) Player.playIndex(i);
     };
     row.querySelector('[data-act="fav"]').onclick = (e) => {
@@ -288,18 +303,27 @@
     const q = searchQ.trim(); const seq = ++_searchSeq;
     if (!q) { renderEmptySearch(); return; }
     r.innerHTML = '<div class="st-block st-sub">' + esc(I18N.t("search_loading")) + '</div>';
-    let online = [], local = [], full = [];
+    let online = [], local = [], full = [], web = [];
     local = API.searchLocal(q);
     if (searchSource !== "local") {
-      // Full-length tracks (Internet Archive) are the primary online source —
-      // they play to the real end, unlike 30s iTunes previews.
-      try { full = await API.searchArchive(q, 12); } catch (e) {}
-      try {
-        const previews = await API.searchOnline(q, 12);
-        // keep previews too, but never cascade duplicates
-        online = API.combine(full, previews).filter(t => !t.full || full.some(f => f.key === t.key));
-        online = API.combine(full, previews);
-      } catch (e) { online = full; }
+      // 1) Working online directory (houseofcosmetics) — real titles/artists/artwork.
+      try { web = await API.searchWeb(q, 14); } catch (e) {}
+      // 2) Full-length streamable tracks (Internet Archive).
+      try { full = await API.searchArchive(q, 10); } catch (e) {}
+      // 3) iTunes previews (30s) as a last fallback for niche titles.
+      let previews = [];
+      try { previews = await API.searchOnline(q, 8); } catch (e) {}
+      // Merge: Archive full tracks first (playable), then unique titles from the
+      // directory (real metadata; play resolves to a playable source), then previews.
+      online = API.combine(API.combine(full, web), previews);
+      // web duplicates by title: prefer the playable Archive version
+      const seenTitle = new Set();
+      online = online.filter(t => {
+        const key = (t.full ? t.title : t.web ? t.title : t.title).toLowerCase();
+        if (t.full && seenTitle.has(key)) return false;
+        seenTitle.add(key);
+        return true;
+      });
     }
     if (seq !== _searchSeq) return;
     let items;

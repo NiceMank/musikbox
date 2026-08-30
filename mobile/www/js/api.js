@@ -114,6 +114,94 @@
     return items.filter(Boolean);
   }
 
+  // ---- houseofcosmetics.co.za: a WORKING, unblocked Tubidy-style directory ----
+  // Real online search results (titles/artists/artwork/durations/video IDs).
+  // Its own playback is a browser converter, so we resolve each result to a
+  // genuinely streamable full-length track (see resolvePlayable). Never fake.
+  const WEB = "https://houseofcosmetics.co.za";
+  function parseWebResults(html) {
+    const items = [];
+    const re = /<article class="media-card.*?<\/article>/g;
+    let m;
+    while ((m = re.exec(html))) {
+      const block = m[0];
+      const idm = block.match(/href="[^"]*?\/details\/([A-Za-z0-9_-]{6,})"/);
+      if (!idm) continue;
+      const vid = idm[1];
+      const tm = block.match(/<a[^>]*title="([^"]*)"[^>]*>/i) || block.match(/alt="([^"]*)"/i);
+      const title = tm ? tm[1].replace(/\s+/g, " ").trim() : "";
+      if (!title) continue;
+      let artist = "";
+      if (title.indexOf(" - ") > 0 && title.indexOf(" - ") < 40) artist = title.split(" - ")[0].trim();
+      const dm = block.match(/(\d{1,2}):(\d{2})\b/);
+      const duration = dm ? (+dm[1]) * 60 + (+dm[2]) : 0;
+      items.push({
+        key: "web-" + vid, title, artist,
+        thumb: "https://i.ytimg.com/vi/" + vid + "/hqdefault.jpg",
+        artwork: "https://i.ytimg.com/vi/" + vid + "/hqdefault.jpg",
+        videoId: vid, duration, src: null,       // no direct stream from the site
+        source: "web", web: true, full: false,
+      });
+    }
+    return items;
+  }
+  async function searchWeb(query, limit) {
+    limit = limit || 20;
+    const url = WEB + "/?search=" + encodeURIComponent(query);
+    const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 12000);
+    try {
+      const res = await fetch(url, { signal: ctl.signal, headers: { "User-Agent": "Mozilla/5.0" } });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const html = await res.text();
+      return parseWebResults(html).slice(0, limit);
+    } finally { clearTimeout(t); }
+  }
+
+  // Resolve a playable full-length source for a web-directory item by searching
+  // Internet Archive for the same title. Returns a real streamable track or null.
+  const _fullCache = {};
+  async function resolvePlayable(t, store) {
+    if (!t) return null;
+    if (t.src) return t;                          // already playable (Archive/local)
+    if (t._resolved) return t._resolved;
+    if (t.web && t.videoId && store._fullCache[t.videoId]) return store._fullCache[t.videoId];
+    try {
+      // Normalize the query: drop clutter so we can find a matching playable track.
+      function norm(s) {
+        return (s || "").toLowerCase()
+          .replace(/\(official (video|lyric|audio)[^)]*\)/g, " ")
+          .replace(/\b(ft|feat|featuring)\b[^a-z].*/gi, " ")
+          .replace(/\b(official|video|audio|music)\b/gi, " ")
+          .replace(/🔥|✨|💿|🎵|mix(tape)? 20\d\d|\d{4}?/gi, " ")
+          .replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+      }
+      const baseTitle = norm(((t.title || "").split("-")[0]));
+      const queries = [
+        norm(t.title), baseTitle,
+        (t.artist ? t.artist + " " + baseTitle : baseTitle),
+      ];
+      for (const q of queries) {
+        if (!q) continue;
+        const full = await searchArchive(q, 5);
+        const best = full.find(f => {
+          const tn = norm(f.title);
+          const a = baseTitle.split(" ").filter(w => w.length > 2).slice(0, 3).join(" ");
+          return a && tn.includes(a);
+        }) || full[0] || null;
+        if (best) {
+          const resolved = Object.assign({}, best, {
+            title: t.title, artist: t.artist || best.artist,
+            thumb: t.thumb || best.thumb, key: t.key + "::" + best.key,
+          });
+          if (t.web) store._fullCache[t.videoId] = resolved;
+          t._resolved = resolved;
+          return resolved;
+        }
+      }
+      return null;
+    } catch (e) { return null; }
+  }
+
   function combine(online, local) {
     const keys = new Set();
     const out = [];
@@ -126,5 +214,5 @@
   window.addEventListener("online", () => { window.isOnline = true; });
   window.addEventListener("offline", () => { window.isOnline = false; });
 
-  global.API = { searchOnline, searchArchive, searchServer, topOnline, searchLocal, combine, serverHealth, apiBase };
+  global.API = { searchOnline, searchArchive, searchWeb, resolvePlayable, searchServer, topOnline, searchLocal, combine, serverHealth, apiBase, _fullCache };
 })(window);

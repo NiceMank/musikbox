@@ -33,7 +33,7 @@ from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 # ----------------------------------------------------------------------------
 # Configuration
 # ----------------------------------------------------------------------------
-BASE = "https://eurostylealuminium.co.za"
+BASE = "https://houseofcosmetics.co.za"
 HOST = "0.0.0.0"
 PORT = int(os.environ.get("PORT", "8787"))
 ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -113,8 +113,39 @@ def fmt_duration(sec):
     m, s = divmod(rem, 60)
     return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
 
+def parse_items_media_card(html_text):
+    """Analyse le format .media-card du clone Tubidy (houseofcosmetics.co.za)."""
+    items = []
+    for block in re.findall(r'<article class="media-card.*?</article>', html_text, re.S):
+        m = re.search(r'href="[^"]*?/details/([A-Za-z0-9_-]{6,})"', block)
+        if not m:
+            continue
+        vid = m.group(1)
+        tm = re.search(r'<a[^>]*title="([^"]*)"[^>]*>', block, re.I) or re.search(r'alt="([^"]*)"', block)
+        title = unescape(tm.group(1)) if tm else ""
+        if not title:
+            continue
+        artist = ""
+        if " - " in title and title.find(" - ") < 40:
+            artist = title.split(" - ")[0].strip()
+        img = re.search(r'data-src="(https://i\.ytimg\.com/[^"]+)"', block)
+        dm = re.search(r'(\d{1,2}):(\d{2})\b', block)
+        dur = (int(dm.group(1)) * 60 + int(dm.group(2))) if dm else 0
+        url = "https://houseofcosmetics.co.za/details/" + vid
+        items.append({
+            "title": title, "artist": artist,
+            "thumb": img.group(1) if img else "",
+            "url": url, "video_id": vid,
+            "duration": dur, "duration_str": fmt_duration(dur),
+        })
+    return items
+
+
 def parse_items(html_text):
-    """Extrait les résultats (article.item) d'une page HTML du site."""
+    """Extrait les résultats d'une page HTML. Gère le format .media-card (clone
+    Tubidy moderne) ET le format .item historique."""
+    if 'class="media-card' in html_text:
+        return parse_items_media_card(html_text)
     items = []
     for art in re.findall(r'<article\s+class="item[^"]*".*?</article>', html_text, re.S):
         m = re.search(r'href="([^"]*?/download/[^"]+)"', art)
@@ -559,11 +590,11 @@ class Handler(SimpleHTTPRequestHandler):
             with _lock:
                 _token_cache[q] = token
         if page == 1:
-            url = BASE + "/search?" + urllib.parse.urlencode({"q": q})
+            url = BASE + "/?search=" + urllib.parse.quote(q)
         elif token:
-            url = BASE + "/search?" + urllib.parse.urlencode({"q": q, "page": page, "pt": token})
+            url = BASE + "/?search=" + urllib.parse.quote(q) + "&page=" + str(page)
         else:
-            url = BASE + "/search?" + urllib.parse.urlencode({"q": q, "page": page})
+            url = BASE + "/?search=" + urllib.parse.quote(q) + "&page=" + str(page)
         data, _ = http_get(url)
         text = data.decode("utf-8", "ignore")
         items = parse_items(text)
