@@ -4,12 +4,22 @@
   "use strict";
 
   const MOODS = {
-    emotion:    { a: "#ffba20", b: "#ff8a3c", name: "amber-gold" },
-    electronic: { a: "#4fd6ff", b: "#9b7bff", name: "cyan-violet" },
-    ambient:    { a: "#4fe0a6", b: "#3aa8c9", name: "emerald" },
-    intense:    { a: "#ff5470", b: "#ff2e4d", name: "crimson" },
+    emotion:    { a: "#ffba20", b: "#ff8a3c", name: "amber-gold",    ui: { base: "#ffba20", deep: "#e79a1c", soft: "#ffd76a" } },
+    electronic: { a: "#4fd6ff", b: "#9b7bff", name: "cyan-violet",  ui: { base: "#4fd6ff", deep: "#1b9cc9", soft: "#8fe4ff" } },
+    ambient:    { a: "#4fe0a6", b: "#3aa8c9", name: "emerald",      ui: { base: "#4fe0a6", deep: "#1f9f7a", soft: "#9bf1cb" } },
+    intense:    { a: "#ff5470", b: "#ff2e4d", name: "crimson",      ui: { base: "#ff5470", deep: "#d21f3d", soft: "#ff9aab" } },
   };
   function moodColor() { return MOODS[(DB.settings && DB.settings.mood) || "emotion"]; }
+  // Drive the whole UI accent from the chosen mood: --amber / -soft / -deep feed
+  // every highlight (buttons, dock, chips, glows, mini + now-playing tint) so a
+  // color switch applies everywhere, not just the background viz.
+  function applyMood() {
+    const ui = (moodColor().ui) || { base: moodColor().a, deep: moodColor().a, soft: moodColor().b };
+    const st = document.documentElement.style;
+    st.setProperty("--amber", ui.base);
+    st.setProperty("--amber-deep", ui.deep);
+    st.setProperty("--amber-soft", ui.soft);
+  }
 
   // ---------------- Sonic Core ----------------
   const core = {
@@ -166,5 +176,5 @@
   }
 
   window.MOODS = MOODS;
-  global.VIZ = { core, cons, dream, moodColor };
+  global.VIZ = { core, cons, dream, moodColor, applyMood };
 })(window);

@@ -108,6 +108,8 @@
     else if (route === "downloads") renderDownloads();
     else if (route === "more") renderMore();
     v.scrollTop = 0;
+    // screen-change transition (retrigger each re-render)
+    v.classList.remove("view-in"); void v.offsetWidth; v.classList.add("view-in");
   }
 
   // ---- track row builder ----
@@ -626,7 +628,7 @@
         '<div class="sw"></div><div class="nm">' + esc(I18N.t(m[2])) + '</div></div>').join("") + '</div>'
     );
     $$("#sheet .mood-card").forEach(c => c.onclick = () => {
-      DB.settings.mood = c.dataset.m; persistSettings(); closeSheet(); renderDyn();
+      DB.settings.mood = c.dataset.m; persistSettings(); closeSheet(); VIZ.applyMood(); renderDyn();
     });
   }
 
@@ -720,6 +722,7 @@
     // restore persisted queue
     if (DB.queue && DB.queue.length) Player.setQueue(DB.queue);
     VIZ.cons.start();
+    VIZ.applyMood(); // accent follows the saved mood everywhere
     // mini player controls — tap body to open Now Playing; playback never resets.
     $("#mini-play").onclick = (e) => { e.stopPropagation(); Player.toggle(); };
     $("#mini-close").onclick = (e) => { e.stopPropagation(); $("#mini").classList.add("hidden"); Player.pause(); };
