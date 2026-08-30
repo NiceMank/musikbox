@@ -218,7 +218,7 @@ svg { display: block; }
    Padded so it never collides with the nav bar, and content scrolls clear of it. */
 #dock {
   position: fixed; left: 0; right: 0;
-  bottom: var(--sat-nav);
+  bottom: 0; /* flush to the true screen bottom: the safe-area inset is added ONCE, inside */
   display: flex; justify-content: space-around; align-items: stretch;
   padding: 8px 10px calc(var(--sat-nav) + 8px);
   z-index: 50;

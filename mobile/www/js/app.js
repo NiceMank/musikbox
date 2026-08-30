@@ -37,6 +37,9 @@
   const safeFilename = (title) => String(title || "sound").replace(/[^\w\u00C0-\u017F .-]+/g, "_").slice(0, 80) + ".mp3";
   const fmtSize = (b) => { if (!b) return "0"; const u = ["B","KB","MB","GB"]; let i=0; while(b>=1024&&i<3){b/=1024;i++;} return b.toFixed(1)+" "+u[i]; };
   function toast(msg, err) {
+    // replace any identical message already on screen so repeated taps don't
+    // stack a wall of the same toast.
+    $$("#toasts .toast").forEach(t => { if (t.textContent === msg) t.remove(); });
     const el = document.createElement("div"); el.className = "toast" + (err ? " err" : "");
     el.textContent = msg; $("#toasts").appendChild(el);
     setTimeout(() => el.remove(), 2600);
