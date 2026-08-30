@@ -46,6 +46,12 @@
   }
   function isFav(key) { return DB.favorites.some(t => t.key === key); }
   function isDl(key) { return DB.downloaded.some(t => t.key === key); }
+  // A track is playable if the engine can actually pull bytes from it. Local
+  // files expose a native/file uri, not an http src — check all source shapes
+  // so a real local song isn't mistaken for an unresolvable online directory item.
+  function hasPlayableSource(t) {
+    return !!(t && (t.src || t.uri || t.previewUrl || t.local || t.source === "local"));
+  }
 
   // ---- global wiring (player) ----
   function whenTrack(t) {
@@ -139,14 +145,15 @@
     row.querySelector(".t-cover").style.color = isFav(t.key) ? "#ffb8c4" : "";
     row.querySelector(".t-cover").style.opacity = t.web && !t.full ? ".75" : "1";
     row.onclick = async () => {
-      // Directory items (web) have no direct stream — resolve to a real playable
-      // full-length track first (never fake / never silent).
+      // Local and streamable online tracks play directly. Only true "web"
+      // directory rows (metadata only, no stream) need resolving to a real
+      // playable full-length source — never fake, never silent.
       let playable = t;
-      if (t.web && !t.src) {
+      if (t.web && !hasPlayableSource(t)) {
         toast(I18N.t("search_loading"));
         playable = await API.resolvePlayable(t, API) || t;
       }
-      if (!playable.src) {
+      if (!hasPlayableSource(playable)) {
         // Honest: the directory lists the title but no free full-length source exists.
         toast(I18N.t("no_full_free"), true);
         return;
