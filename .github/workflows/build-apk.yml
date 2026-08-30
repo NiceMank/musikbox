@@ -3,7 +3,7 @@ name: Build Android APK
 on:
   workflow_dispatch:
   push:
-    branches: [v1]
+    branches: [v1, v2]
     paths:
       - "mobile/**"
       - ".github/workflows/build-apk.yml"
@@ -43,18 +43,29 @@ jobs:
           fi
           npx cap sync android
 
-      - name: Enable cleartext / internet in manifest
+      - name: Configure Android manifest (permissions & cleartext)
         working-directory: mobile
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
-          if [ -f "$MANIFEST" ]; then
-            if ! grep -q 'android.permission.INTERNET' "$MANIFEST"; then
-              sed -i 's|<application|<uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />\n    <application|' "$MANIFEST"
-            fi
-            if ! grep -q 'usesCleartextTraffic' "$MANIFEST"; then
-              sed -i 's/<application/<application android:usesCleartextTraffic="true" /' "$MANIFEST"
-            fi
+          if [ ! -f "$MANIFEST" ]; then
+            echo "::error::Manifest not found after cap sync"
+            exit 1
           fi
+          # grant Android 13+ media audio read + legacy external storage
+          for P in "android.permission.INTERNET" \
+                   "android.permission.ACCESS_NETWORK_STATE" \
+                   "android.permission.READ_EXTERNAL_STORAGE" \
+                   "android.permission.READ_MEDIA_AUDIO" \
+                   "android.permission.WAKE_LOCK"; do
+            if ! grep -q "$P" "$MANIFEST"; then
+              sed -i "s|</manifest>|    <uses-permission android:name=\"$P\" />\n</manifest>|" "$MANIFEST"
+            fi
+          done
+          if ! grep -q 'usesCleartextTraffic' "$MANIFEST"; then
+            sed -i 's/<application/<application android:usesCleartextTraffic="true" /' "$MANIFEST"
+          fi
+          echo "--- Validate app id & package ---"
+          grep -n "package=" "$MANIFEST" | head -1
 
       - name: Build debug APK
         working-directory: mobile/android
@@ -68,6 +79,11 @@ jobs:
           APK=$(find mobile/android -name "*.apk" -path "*/debug/*" | head -1)
           echo "path=$APK" >> "$GITHUB_OUTPUT"
           ls -lh "$APK"
+          # fail visibly if no APK was actually produced
+          if [ -z "$APK" ] || [ ! -f "$APK" ]; then
+            echo "::error::No APK produced by build"
+            exit 1
+          fi
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
