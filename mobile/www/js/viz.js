@@ -22,6 +22,7 @@
       const s = c.clientWidth || 300;
       c.width = s * dpr; c.height = s * dpr;
       this.ctx = c.getContext("2d"); this.dpr = dpr; this.size = s;
+      if (!this.ctx) return; // canvas context unavailable (headless/unsupported) — no crash
       this.loop();
     },
     loop() {
@@ -80,6 +81,7 @@
       const dpr = Math.min(2, window.devicePixelRatio || 1);
       c.width = innerWidth * dpr; c.height = innerHeight * dpr;
       this.ctx = c.getContext("2d"); this.w = innerWidth * dpr; this.h = innerHeight * dpr;
+      if (!this.ctx) return;
       this.parts = Array.from({ length: 44 }, () => ({
         x: Math.random() * this.w, y: Math.random() * this.h,
         vx: (Math.random() - .5) * .2 * dpr, vy: (Math.random() - .5) * .2 * dpr,
@@ -125,6 +127,7 @@
       const dpr = Math.min(2, window.devicePixelRatio || 1);
       c.width = innerWidth * dpr; c.height = innerHeight * dpr;
       this.ctx = c.getContext("2d"); this.w = innerWidth * dpr; this.h = innerHeight * dpr;
+      if (!this.ctx) return;
       this.els = Array.from({ length: 26 }, () => ({
         x: Math.random() * this.w, y: Math.random() * this.h,
         r: (Math.random() * 60 + 12) * dpr, vx: (Math.random() - .5) * .6 * dpr, vy: (Math.random() - .5) * .6 * dpr,

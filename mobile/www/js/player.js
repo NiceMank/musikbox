@@ -4,9 +4,21 @@
 (function (global) {
   "use strict";
 
+  const doc = (typeof document !== "undefined") ? document : null;
   const audio = new Audio();
   audio.preload = "metadata";
   audio.volume = 0.85;
+  // Attach the element to the DOM and force inline playback so Android WebViews /
+  // mobile browsers don't gate or auto-stop it, and so it survives re-renders.
+  if (doc && doc.body) {
+    try {
+      audio.id = "aether-audio";
+      audio.setAttribute("playsinline", "");
+      audio.setAttribute("webkit-playsinline", "");
+      audio.style.display = "none";
+      if (!doc.getElementById("aether-audio")) doc.body.appendChild(audio);
+    } catch (e) { /* non-DOM audio (headless) — playback still works */ }
+  }
 
   // True cause of "stops after a few seconds": routing a cross-origin media element
   // through a WebAudio graph (analyser) REQUIRES the media to be fetched in CORS mode.
@@ -36,6 +48,57 @@
     if (typeof fn === "function") { try { fn(); } catch (e) {} }
   }
 
+  /* ---- Real Android media controls: MediaSession + media notification.
+     Works in the Capacitor WebView foreground: exposes artwork/title/artist and
+     play/pause/prev/next/seek on the system media output & lock screen. All state
+     is driven by the REAL engine events (never simulated). ---- */
+  const ms = (typeof navigator !== "undefined" && navigator.mediaSession) ? navigator.mediaSession : null;
+  let lastArtwork = "";
+  function updateMediaSession(t) {
+    if (!ms || !t) return;
+    try {
+      ms.metadata = new MediaMetadata({
+        title: t.title || "",
+        artist: t.artist || "",
+        album: t.album || "",
+        artwork: (t.artwork || t.thumb) ? [{
+          src: t.artwork || t.thumb, sizes: "512x512", type: "image/jpeg",
+        }] : [],
+      });
+      lastArtwork = t.artwork || t.thumb || "";
+    } catch (e) {}
+  }
+  function updatePlaybackState(playing) {
+    if (!ms) return;
+    try { ms.playbackState = playing ? "playing" : "paused"; } catch (e) {}
+  }
+  function setupMediaSession() {
+    if (!ms) return;
+    try {
+      ms.setActionHandler("play", () => Player.play());
+      ms.setActionHandler("pause", () => Player.pause());
+      ms.setActionHandler("previoustrack", () => Player.prev());
+      ms.setActionHandler("nexttrack", () => Player.next());
+      if (ms.setPositionState) {
+        try { ms.setPositionState({ duration: 0, playbackRate: 1, position: 0 }); } catch (e) {}
+      }
+    } catch (e) {}
+  }
+  // Update position metadata at ~1Hz while playing; adds scrubber/lock-screen time.
+  function positionPump() {
+    if (!ms || !ms.setPositionState) return;
+    const playing = audio.paused === false && audio.duration > 0;
+    if (!playing) return;
+    try {
+      ms.setPositionState({
+        duration: audio.duration || 0,
+        playbackRate: audio.playbackRate || 1,
+        position: audio.currentTime || 0,
+      });
+    } catch (e) {}
+  }
+  if (typeof setInterval !== "undefined") setInterval(positionPump, 1000);
+
   const Player = {
     current: null,     // track object
     queue: [],         // array of track objects
@@ -64,6 +127,7 @@
         if (audio.src) this.emit("error", audio.error || { message: "audio-error" });
       });
       audio.addEventListener("ended", () => this._onEnded());
+      setupMediaSession();
     },
 
     _ensureCtx() {
@@ -120,6 +184,7 @@
       this.current = t;
       audio.setSource(src);
       this.playing = false;
+      updateMediaSession(t);
       this.emit("track", t);
       this.emit("state", false);
     },
@@ -133,11 +198,17 @@
       this._ctx().catch(() => {});
       audio.play().then(() => {
         this.playing = true;
+        updatePlaybackState(true);
         this.emit("state", true);
       }).catch((e) => this.emit("error", e));
     },
 
-    pause() { try { audio.pause(); } catch (e) {} this.playing = false; this.emit("state", false); },
+    pause() {
+      try { audio.pause(); } catch (e) {}
+      this.playing = false;
+      updatePlaybackState(false);
+      this.emit("state", false);
+    },
     toggle() { if (audio.paused || !this.playing) this.play(); else this.pause(); },
     retry() { if (this.current) this.play(this.current); },
 
@@ -145,6 +216,7 @@
     seek(sec) {
       sec = Math.max(0, Math.min(sec, this.duration() || sec));
       if (isFinite(sec)) { try { audio.currentTime = sec; } catch (e) {} }
+      positionPump();
       this.emit("time", audio.currentTime, this.duration());
     },
     seekFrac(f) { if (this.duration()) this.seek(f * this.duration()); },

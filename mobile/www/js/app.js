@@ -238,16 +238,16 @@
     if ($("#np-retry")) $("#np-retry").onclick = () => Player.retry();
     const seek = $("#np-seek");
     if (seek) seek.onclick = (e) => { const r = seek.getBoundingClientRect(); Player.seekFrac((e.clientX - r.left) / r.width); };
-    // periodic time update for NP
+    // periodic time update for NP — only ticks while the Home/Now-Playing view is visible
     if (!bindNowPlayingControls._t) {
       bindNowPlayingControls._t = setInterval(() => {
+        if (route !== "home") return;
         const cur = Player.currentTime, d = Player.duration();
         const c = $("#np-cur"), to = $("#np-tot"), f = $("#np-fill"), k = $("#np-knob");
         if (c) c.textContent = fmt(cur);
         if (to) to.textContent = fmt(d);
         if (f && d) { const p = cur / d * 100; f.style.width = p + "%"; if (k) k.style.left = "calc(" + p + "% - 7px)"; }
-        const img = $("#np-img");
-      }, 350);
+      }, 500);
     }
   }
 

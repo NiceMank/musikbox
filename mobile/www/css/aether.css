@@ -23,8 +23,9 @@
 
   --r-xl: 34px; --r-lg: 26px; --r-md: 20px; --r-pill: 999px;
 
-  --glass:  rgba(255,255,255,.05);
-  --glass-2:rgba(255,255,255,.08);
+  --glass:  rgba(255,255,255,.045);
+  --glass-2:rgba(255,255,255,.07);
+  --surface: rgba(16,13,24,.72);
 
   --shadow-amber: 0 0 26px rgba(255,186,32,.14), inset 0 0 12px rgba(255,186,32,.05);
   --shadow-md:    0 8px 24px rgba(0,0,0,.38);
@@ -60,7 +61,8 @@ body {
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
-  padding: calc(var(--sat-top) + 10px) 16px calc(var(--sat-nav) + 96px);
+  /* top safe area + bottom space for mini player (74px) and dock (70px) */
+  padding: calc(var(--sat-top) + 10px) 16px calc(var(--sat-nav) + 158px);
 }
 .hidden { display: none !important; }
 
@@ -200,40 +202,52 @@ svg { display: block; }
 .btn.solid { color: #1a1205; background: var(--gold); border-color: transparent; font-weight: 600; box-shadow: var(--shadow-amber); }
 .btn:active { transform: scale(.97); }
 
-/* ---------- Bottom navigation (organic dock) ---------- */
+/* ---------- Bottom navigation (organic dock) ----------
+   Anchored above the system gesture/navigation area via safe-area inset.
+   Padded so it never collides with the nav bar, and content scrolls clear of it. */
 #dock {
-  position: fixed; left: 14px; right: 14px;
-  bottom: calc(var(--sat-nav) + 12px);
-  display: flex; justify-content: space-around; align-items: center;
-  padding: 10px 8px; z-index: 50;
-  background: linear-gradient(165deg, rgba(255,255,255,.07), rgba(255,255,255,.02));
-  border: 1px solid var(--line); border-radius: var(--r-xl);
-  backdrop-filter: blur(28px); -webkit-backdrop-filter: blur(28px);
-  box-shadow: var(--shadow-md);
+  position: fixed; left: 0; right: 0;
+  bottom: var(--sat-nav);
+  display: flex; justify-content: space-around; align-items: stretch;
+  padding: 8px 10px calc(var(--sat-nav) + 8px);
+  z-index: 50;
+  background: linear-gradient(180deg, rgba(18,15,24,.72), rgba(10,9,16,.92));
+  border-top: 1px solid var(--line);
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+}
+/* keep the pill look on the inner items while the whole bar hugs the bottom edge */
+@media (min-width: 520px) {
+  #dock { left: 50%; right: auto; transform: translateX(-50%); width: min(100%, 480px);
+    bottom: calc(var(--sat-nav) + 10px); border-radius: var(--r-xl);
+    border: 1px solid var(--line); }
 }
 #dock .nav {
-  position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px;
+  position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 4px; flex: 1 1 0; max-width: 96px; min-height: 50px;
   background: none; border: 0; color: var(--muted); cursor: pointer; font-family: var(--font);
-  padding: 4px 10px; min-width: 52px;
+  padding: 6px 4px; border-radius: 20px; transition: .2s;
 }
 #dock .nav span { font-size: 10px; letter-spacing: 1px; text-transform: uppercase; }
 #dock .nav svg { width: 22px; height: 22px; transition: .2s; }
-#dock .nav.on { color: var(--amber); }
+#dock .nav.on { color: var(--amber); background: rgba(255,186,32,.10); }
 #dock .nav.on::before {
-  content:""; position: absolute; inset: -2px -4px; border-radius: 22px; z-index:-1;
-  background: radial-gradient(closest-side, rgba(255,186,32,.30), transparent 75%);
+  content:""; position: absolute; inset: 0; border-radius: 20px; z-index:-1;
+  box-shadow: inset 0 0 0 1px rgba(255,186,32,.28);
 }
 #dock .nav.on svg { filter: drop-shadow(0 0 8px rgba(255,186,32,.7)); transform: translateY(-1px); }
 
 /* ---------- Mini player ---------- */
 #mini {
-  position: fixed; left: 14px; right: 14px;
+  position: fixed; left: 12px; right: 12px;
   bottom: calc(var(--sat-nav) + 74px);
   z-index: 45; display: flex; align-items: center; gap: 12px;
   padding: 9px 10px; border-radius: var(--r-lg);
-  background: linear-gradient(160deg, rgba(255,186,32,.16), rgba(30,22,8,.6));
-  border: 1px solid rgba(255,186,32,.3); box-shadow: var(--shadow-amber);
-  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  background: linear-gradient(160deg, rgba(255,186,32,.14), rgba(22,17,8,.78));
+  border: 1px solid rgba(255,186,32,.24); box-shadow: var(--shadow-md);
+  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+}
+@media (min-width: 520px) {
+  #mini { left: 50%; right: auto; transform: translateX(-50%); width: min(100%, 480px); }
 }
 #mini .m-cover { width: 46px; height: 46px; border-radius: 14px; overflow: hidden; flex: 0 0 auto;
   background: rgba(0,0,0,.3); display:grid; place-items:center; color:rgba(255,186,32,.8);}
@@ -302,7 +316,13 @@ input[type=range].vol::-webkit-slider-thumb { -webkit-appearance:none; width:16p
 .mood-intense  { --mc: #ff5470; }
 
 /* ---------- Constellation / canvas ---------- */
-canvas#viz { position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: .7; }
+/* background constellation: subtle, non-distracting, faded at the edges */
+canvas#viz { position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: .35;
+  -webkit-mask-image: radial-gradient(120% 90% at 50% 40%, #000 55%, transparent 100%);
+  mask-image: radial-gradient(120% 90% at 50% 40%, #000 55%, transparent 100%); }
+@media (prefers-reduced-motion: reduce) {
+  canvas#viz, .sonic-core, #dream-canvas { display: none !important; }
+}
 #app * { position: relative; z-index: 1; }
 
 /* ---------- Queue ---------- */
