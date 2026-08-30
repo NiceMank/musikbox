@@ -1,0 +1,19 @@
+{
+  "name": "aether-media",
+  "version": "1.0.0",
+  "description": "Local music scanner for MusikBox/Aether: requests READ_MEDIA_AUDIO at runtime and queries Android MediaStore for real audio metadata (title/artist/album/duration), including SD card.",
+  "main": "dist/esm.js",
+  "types": "dist/esm.d.ts",
+  "capacitor": {
+    "android": {
+      "src": "android"
+    }
+  },
+  "files": [
+    "dist",
+    "android"
+  ],
+  "peerDependencies": {
+    "@capacitor/core": ">=7.0.0"
+  }
+}

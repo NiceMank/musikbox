@@ -5,3 +5,7 @@ android/
 *.aab
 apk/
 tests/node_modules/
+
+# keep the aether-media plugin android source tracked despite the global android/ ignore
+!aether-media/android/
+!aether-media/android/**

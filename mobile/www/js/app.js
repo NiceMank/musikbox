@@ -644,6 +644,23 @@
 
   // ---- local scan ----
   let scanning = false;
+  let mediaInit = false;
+  // Ask for the device music permission once on launch (native only), then
+  // auto-scan so the library fills. This is what triggers the real "Music and
+  // audio" system prompt — without it, no folder/dossier access is ever granted.
+  async function ensureMediaAccess() {
+    if (mediaInit) return; mediaInit = true;
+    try {
+      const native = typeof Capacitor !== "undefined" && Capacitor.isNativePlatform && Capacitor.isNativePlatform();
+      if (!native) return;
+    } catch (e) { return; }
+    try {
+      const perms = await Scan.permission();   // requests READ_MEDIA_AUDIO
+      if (perms.granted && !perms.unsupported && !Object.keys(DB.localIndex).length) {
+        scanLocal();                            // enumerate device audio, including SD card/Download
+      }
+    } catch (e) { /* user may retry via the library scan tile */ }
+  }
   async function scanLocal() {
     if (scanning) return; scanning = true;
     toast(I18N.t("lib_scanning"));
@@ -744,6 +761,8 @@
     // keep dock above mini
     const dock = $("#dock");
     if (dock) dock.style.marginBottom = "0";
+    // request device-music access + auto-scan on first launch (native only)
+    ensureMediaAccess();
   }
   window.addEventListener("hashchange", () => {});
   document.addEventListener("visibilitychange", () => { if (document.hidden) { } else { renderPlayerFace(); } });
