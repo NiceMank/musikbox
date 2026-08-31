@@ -162,9 +162,11 @@
   const _fullCache = {};
   async function resolvePlayable(t, store) {
     if (!t) return null;
-    if (t.src) return t;                          // already playable (Archive/local)
+    if (t.src || t.full || t.uri) return t;       // already full-length/playable to the end
     if (t._resolved) return t._resolved;
-    if (t.web && t.videoId && store._fullCache[t.videoId]) return store._fullCache[t.videoId];
+    // Cache by a stable key so a 30s preview is only searched once too.
+    const ckey = (t.web && t.videoId) ? ("web-" + t.videoId) : (t.key || t.title);
+    if (store._fullCache[ckey]) return store._fullCache[ckey];
     try {
       // Normalize the query: drop clutter so we can find a matching playable track.
       function norm(s) {
@@ -192,8 +194,9 @@
           const resolved = Object.assign({}, best, {
             title: t.title, artist: t.artist || best.artist,
             thumb: t.thumb || best.thumb, key: t.key + "::" + best.key,
+            originalKey: t.key, // keep the source preview key for dedupe/favs
           });
-          if (t.web) store._fullCache[t.videoId] = resolved;
+          store._fullCache[ckey] = resolved;
           t._resolved = resolved;
           return resolved;
         }

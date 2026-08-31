@@ -282,7 +282,11 @@ svg { display: block; }
 .np-art .art-img {
   position: absolute; inset: 12%; border-radius: 50%; overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--amber) 35%, transparent); background: #100d18;
+  will-change: transform;
 }
+/* The now-playing disc spins like a record while playing (pauses when not). */
+.np-art .art-img.spin { animation: npSpin 9s linear infinite; }
+@keyframes npSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 .np-art .art-img img { width: 100%; height: 100%; object-fit: cover; }
 .np-art .art-img .noimg { position:absolute; inset:0; display:grid; place-items:center; color: rgba(255,220,150,.55); }
 .noimg svg, .np-art .art-img .noimg svg { width: 38px; height: 38px; }
@@ -317,6 +321,7 @@ svg { display: block; }
 
 /* ---------- Volume ---------- */
 .vol-wrap { display:flex; align-items:center; gap:10px; color:var(--text-2); }
+.vol-wrap svg { width: 16px; height: 16px; flex: 0 0 auto; }
 input[type=range].vol { -webkit-appearance:none; appearance:none; width: 130px; height: 4px; border-radius:4px;
   background: rgba(255,255,255,.14) ; outline:none;}
 input[type=range].vol::-webkit-slider-thumb { -webkit-appearance:none; width:16px; height:16px; border-radius:50%;

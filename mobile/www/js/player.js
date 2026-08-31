@@ -27,7 +27,14 @@
   // http(s) sources (which here send Access-Control-Allow-Origin: *); local blob/file
   // sources are same-origin/native and must NOT have crossOrigin set.
   audio.setSource = function (src) {
-    const remote = /^https?:\/\//i.test(src || "");
+    // Capacitor serves the app AND local media on the same origin (https://localhost).
+    // Its own asset paths (/_capacitor_content_/, /_capacitor_file_/) are same-origin
+    // — they must NOT get crossOrigin, or the CORS check can taint/block the stream and
+    // local songs fail with 'Lecture impossible'. Only genuinely cross-origin http(s)
+    // streams (iTunes previews, Archive MP3s, backend proxy) need crossOrigin.
+    const s = String(src || "");
+    const isCapLocal = /\/_capacitor_(content|file)_\//.test(s);
+    const remote = /^https?:\/\//i.test(s) && !isCapLocal;
     if (remote !== audio._crossSet) {
       try {
         if (remote) { audio.crossOrigin = "anonymous"; }
@@ -35,7 +42,7 @@
         audio._crossSet = remote;
       } catch (e) {}
     }
-    audio.src = src;
+    audio.src = s;
   };
 
   let audioCtx = null;

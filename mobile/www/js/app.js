@@ -145,22 +145,31 @@
     row.querySelector(".t-cover").style.color = isFav(t.key) ? "#ffb8c4" : "";
     row.querySelector(".t-cover").style.opacity = t.web && !t.full ? ".75" : "1";
     row.onclick = async () => {
-      // Local and streamable online tracks play directly. Only true "web"
-      // directory rows (metadata only, no stream) need resolving to a real
-      // playable full-length source — never fake, never silent.
+      // Local songs play immediately. Any online track that is only a 30s
+      // preview (or a metadata-only web row) is first upgraded to a real
+      // full-length source (Internet Archive) when a free one exists — so we
+      // don't settle for the 30s clip when the whole song is freely available.
       let playable = t;
-      if (t.web && !hasPlayableSource(t)) {
+      const isLocal = t.source === "local" || t.local;
+      if (!isLocal && !hasPlayableSource(t) && !t.full) {
         toast(I18N.t("search_loading"));
-        playable = await API.resolvePlayable(t, API) || t;
+        const resolved = await API.resolvePlayable(t, API);
+        if (resolved) playable = resolved;
+      } else if (!isLocal && !t.full && !t.uri && !t.src && t.previewUrl) {
+        // 30s preview: try to upgrade to a full-length version silently.
+        const resolved = await API.resolvePlayable(t, API);
+        if (resolved) playable = resolved;
       }
       if (!hasPlayableSource(playable)) {
-        // Honest: the directory lists the title but no free full-length source exists.
+        // Honest: no free full-length source exists.
         toast(I18N.t("no_full_free"), true);
         return;
       }
       const nl = list || [playable];
-      Player.setQueue(nl);
-      const i = nl.findIndex(x => x.key === playable.key);
+      // favour the played (possibly upgraded) track in the queue when present
+      const arr = (nl.some(x => x.key === playable.key) ? nl : [playable, ...nl]);
+      Player.setQueue(arr);
+      const i = arr.findIndex(x => x.key === playable.key);
       if (i >= 0) Player.playIndex(i);
     };
     row.querySelector('[data-act="fav"]').onclick = (e) => {
@@ -226,8 +235,9 @@
         '<div class="np-meta"><div class="np-tag">' + esc(I18N.t("np_now")) + '</div>' +
         '<p class="np-title" style="font-weight:300;color:var(--text-2)">' + esc(I18N.t("home_nothing")) + '</p></div>';
     }
+    const art = t.thumb || t.artwork;
     return '<div class="np-art"><canvas id="np-core" class="sonic-core"></canvas>' +
-      '<div class="art-img">' + (t.thumb || t.artwork ? '<img id="np-img" alt="">' : '<div class="noimg">' + I.note + '</div>') + '</div></div>' +
+      '<div class="art-img' + (Player.playing ? ' spin' : '') + '">' + (art ? '<img id="np-img" alt="" src="' + esc(art) + '">' : '<div class="noimg">' + I.note + '</div>') + '</div></div>' +
       '<div class="np-meta"><div class="np-tag">' + esc(I18N.t("np_now")) + '</div>' +
       '<h1 class="np-title" id="np-title">' + esc(t.title) + '</h1>' +
       '<div class="np-artist" id="np-artist">' + esc(t.artist || "") + '</div></div>' +
